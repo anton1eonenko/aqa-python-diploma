@@ -1,0 +1,108 @@
+name: Playwright Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: 'Browser'
+        required: false
+        default: 'chromium'
+        type: choice
+        options:
+          - chromium
+          - firefox
+          - webkit
+      markers:
+        description: 'pytest markers (smoke, regression, or empty for all tests)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: playwright install --with-deps ${{ inputs.browser || 'chromium' }}
+
+      - name: Run tests
+        env:
+          BASE_URL: ${{ secrets.BASE_URL }}
+          BROWSER: ${{ inputs.browser || 'chromium' }}
+          HEADLESS: 'true'
+        run: |
+          MARKERS="${{ inputs.markers }}"
+          if [ -n "$MARKERS" ]; then
+            pytest --alluredir=allure-results -m "$MARKERS" || true
+          else
+            pytest --alluredir=allure-results || true
+          fi
+
+      - name: Get Allure history
+        uses: actions/checkout@v4
+        if: always()
+        continue-on-error: true
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Generate Allure report
+        uses: simple-elf/allure-report-action@v1.9
+        if: always()
+        with:
+          allure_results: allure-results
+          allure_history: allure-history
+          keep_reports: 20
+
+      - name: Deploy Allure report to GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: allure-history
+
+      - name: Upload raw Allure results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: allure-results
+          retention-days: 7
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-html-report
+          path: reports/
+          retention-days: 7
+
+      - name: Write report summary
+        if: always()
+        run: |
+          OWNER=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f1)
+          REPO=$(echo "$GITHUB_REPOSITORY" | cut -d'/' -f2)
+          PAGES_URL="https://${OWNER}.github.io/${REPO}/"
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Parameter | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Browser | \`${{ inputs.browser || 'chromium' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Markers | \`${{ inputs.markers || 'all' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**[Open Allure Report](${PAGES_URL})**" >> $GITHUB_STEP_SUMMARY
