@@ -1,50 +1,74 @@
-from playwright.sync_api import Page
+from playwright.sync_api import Page, Locator
 from pages.base_page import BasePage
 
 
 class CatalogPage(BasePage):
-    # Locators
-    CATEGORY_TITLE = "h1.g-page__title, h1.catalog-title, h1"
-    PRODUCT_CARDS = ".g-i-tile, .products-list__item, .product-card"
-    PRODUCT_TITLE = ".g-i-tile__description a, .product-card__name"
-    PRODUCT_PRICE = ".g-i-tile__price, .product-card__price"
-    FILTER_SECTION = ".filters, .sidebar-filters, .filter-block"
-    PRICE_FILTER_MIN = "input[name='price_min'], input[placeholder='от']"
-    PRICE_FILTER_MAX = "input[name='price_max'], input[placeholder='до']"
-    SORT_SELECT = "select[name='sort'], .sort__select"
-    PAGINATION = ".pagination, .pager"
-    PAGINATION_NEXT = ".pagination__next, a:has-text('Следующая')"
-    VIEW_TOGGLE_GRID = "button[data-view='tile'], .view-toggle__grid"
-    VIEW_TOGGLE_LIST = "button[data-view='list'], .view-toggle__list"
-    SUBCATEGORY_LINKS = ".subcategories a, .catalog-categories a"
 
-    def __init__(self, page: Page):
+    class _Containers:
+        def __init__(self, page: Page) -> None:
+            self.MainContainer: Locator = page.locator(".g-page")
+
+    class _Text:
+        def __init__(self, container: Locator) -> None:
+            self.PAGE_TITLE: Locator = container.locator("h1.g-page__title")
+
+    class _Items:
+        def __init__(self, container: Locator) -> None:
+            self.PRODUCT_CARD: Locator = container.locator(".g-i-tile")
+            self.PRODUCT_LINK: Locator = container.locator(".g-i-tile__description > a")
+            self.PRODUCT_PRICE: Locator = container.locator("[class*='g-i-tile__price']")
+
+    class _Sections:
+        def __init__(self, container: Locator) -> None:
+            self.FILTERS: Locator = container.locator("[class*='sidebar']")
+            self.PAGINATION: Locator = container.locator(".pagination")
+            self.SUBCATEGORIES: Locator = container.locator(".subcategories")
+
+    class _Buttons:
+        def __init__(self, container: Locator) -> None:
+            self.PAGINATION_NEXT: Locator = container.locator("a.pagination__next")
+            self.VIEW_GRID: Locator = container.locator("button[data-view='tile']")
+            self.VIEW_LIST: Locator = container.locator("button[data-view='list']")
+
+    def __init__(self, page: Page) -> None:
         super().__init__(page)
+        self.Containers = CatalogPage._Containers(page)
+        self.Text = CatalogPage._Text(self.Containers.MainContainer)
+        self.Items = CatalogPage._Items(self.Containers.MainContainer)
+        self.Sections = CatalogPage._Sections(self.Containers.MainContainer)
+        self.Buttons = CatalogPage._Buttons(self.Containers.MainContainer)
 
-    def get_category_title(self) -> str:
-        return self.page.locator(self.CATEGORY_TITLE).first.inner_text()
+    def get_page_title(self) -> Locator:
+        return self.Text.PAGE_TITLE.first
+
+    def get_product_cards(self) -> Locator:
+        return self.Items.PRODUCT_CARD
+
+    def get_product_links(self) -> Locator:
+        return self.Items.PRODUCT_LINK
+
+    def get_filters(self) -> Locator:
+        return self.Sections.FILTERS
+
+    def get_pagination(self) -> Locator:
+        return self.Sections.PAGINATION
+
+    def get_pagination_next(self) -> Locator:
+        return self.Buttons.PAGINATION_NEXT
+
+    def get_subcategory_links(self) -> Locator:
+        return self.Sections.SUBCATEGORIES.locator("a")
 
     def get_products_count(self) -> int:
-        return self.page.locator(self.PRODUCT_CARDS).count()
-
-    def click_first_product(self):
-        self.page.locator(self.PRODUCT_TITLE).first.click()
-        self.page.wait_for_load_state("networkidle")
+        return self.get_product_cards().count()
 
     def get_first_product_title(self) -> str:
-        return self.page.locator(self.PRODUCT_TITLE).first.inner_text()
+        return self.get_product_links().first.inner_text()
 
-    def is_filter_visible(self) -> bool:
-        return self.page.locator(self.FILTER_SECTION).is_visible()
+    def click_first_product(self) -> None:
+        self.get_product_links().first.click()
+        self.page.wait_for_load_state("networkidle")
 
-    def is_pagination_visible(self) -> bool:
-        return self.page.locator(self.PAGINATION).is_visible()
-
-    def go_to_next_page(self):
-        next_btn = self.page.locator(self.PAGINATION_NEXT).first
-        if next_btn.is_visible():
-            next_btn.click()
-            self.page.wait_for_load_state("networkidle")
-
-    def get_subcategory_count(self) -> int:
-        return self.page.locator(self.SUBCATEGORY_LINKS).count()
+    def go_to_next_page(self) -> None:
+        self.Buttons.PAGINATION_NEXT.click()
+        self.page.wait_for_load_state("networkidle")
